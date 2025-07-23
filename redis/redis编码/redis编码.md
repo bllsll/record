@@ -20,6 +20,27 @@ redis采用jemalloc作为默认内存分配器，分配颗粒度为8字节(64操
 
 ![img](https://ask.qcloudimg.com/http-save/yehe-6595841/t2l8ss0qli.png)
 
+- 编码方式的动态切换
+  - String
+    - 整数值（如 SET key 123）→ 编码为 INT
+    - 短字符串（长度 < 44 字节）→ 编码为 EMBSTR
+    - 长字符串 → 编码为 RAW
+  - Hash
+    - 字段数少且值小 → 编码为 ZIPLIST（压缩列表）
+    - 字段数多或值大 → 编码为 HASHTABLE
+  - List
+    - quicklist（Redis 3.2+）：由多个 ziplist 组成的双向链表，平衡内存和性能。
+    - ziplist（旧版本）：元素少且值小时使用。
+  - set无序、唯一元素集合，支持交集、并集等操作。
+    - intset：当元素全为整数且数量较少时使用。
+    - hashtable：元素包含字符串或数量较多时使用。
+  - Sorted Set元素带分数（score），按分数排序，支持范围查询
+    - ziplist：元素少且值小时使用。
+    - skiplist（跳跃表）：元素多或值大时使用，平衡树和链表的优势。
+  -  Bitmap（位图）
+    - 本质：基于 String 类型的位操作，每个位存储 0 或 1。
+    - 命令：SETBIT、GETBIT、BITCOUNT、BITOP。 应用场景：用户签到（每天占 1 位）、活跃用户统计。
+
 ##### redisObject结构
 
 在Redis中有一个**「核心的对象」**叫做`redisObject` ，是用来表示所有的key和value的，用redisObject结构体来表示`String、Hash、List、Set、ZSet`五种数据类型。
