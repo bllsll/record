@@ -71,6 +71,79 @@ expire key seconds 设置过期时间，以s计
 
 expireat key timestamp 
 
+key的迁移
+
+- `key的迁移`
+
+  - move key db//将key放到另外一个db上。move命令在Redis内部数据库之间迁移数据
+
+  - dump+restore可以实现在不同的Redis实例之间进行数据迁移的功能，
+
+    - 1）在源Redis上，dump命令会将键值序列化，格式采用的是RDB格式。
+
+      2）在目标Redis上，restore命令将上面序列化的值进行复原，其中ttl参
+
+      数代表过期时间，如果ttl=0代表没有过期时间。
+
+      ![image-20250724163646511](/Users/shilinling/Library/Application Support/typora-user-images/image-20250724163646511.png)
+
+      3）migrate命令也是用于在Redis实例间进行数据迁移的，实际上migrate命
+
+      令就是将dump、restore、del三个命令进行组合，migrate命令具有原子性
+
+      ```bash
+      MIGRATE host port key|"" destination-db timeout [COPY] [REPLACE] [KEYS key1 key2 ...]
+      ```
+
+      #### 参数说明：
+
+      | 参数              | 含义                                                         |                                                              |
+      | ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+      | `host`            | 目标 Redis 实例的 IP 地址或主机名。                          |                                                              |
+      | `port`            | 目标 Redis 实例的端口号。                                    |                                                              |
+      | `key              | ""`                                                          | 要迁移的单个 key；若使用 `KEYS` 选项批量迁移，此处需设为空字符串 `""`。 |
+      | `destination-db`  | 目标实例中接收 key 的数据库编号（Redis 默认有 16 个库，编号 0-15）。 |                                                              |
+      | `timeout`         | 迁移操作的超时时间（毫秒），若超过此时长未完成则失败。       |                                                              |
+      | `[COPY]`          | 可选参数，默认迁移后会删除源实例的 key；加上 `COPY` 则保留源 key。 |                                                              |
+      | `[REPLACE]`       | 可选参数，若目标实例中已存在同名 key，默认迁移失败；加上 `REPLACE` 则覆盖目标 key。 |                                                              |
+      | `[KEYS key1 ...]` | 可选参数，用于批量迁移多个 key，此时前面的 `key` 参数必须设为 `""`。 |                                                              |
+
+      ### 三、使用示例
+
+      #### 1. 迁移单个 key
+
+      将源实例的 `user:100` 迁移到目标实例（`192.168.1.100:6379`）的数据库 0，超时时间 5000 毫秒（5 秒），迁移后删除源 key：
+
+      ```bash
+      MIGRATE 192.168.1.100 6379 user:100 0 5000
+      ```
+
+      #### 2. 迁移单个 key 并保留源实例的 key
+
+      使用 `COPY` 参数，迁移后源实例仍保留 `user:100`：
+
+      ```bash
+      MIGRATE 192.168.1.100 6379 user:100 0 5000 COPY
+      ```
+
+      #### 3. 迁移时覆盖目标实例的同名 key
+
+      若目标实例已有 `user:100`，用 `REPLACE` 强制覆盖：
+
+      ```bash
+      MIGRATE 192.168.1.100 6379 user:100 0 5000 REPLACE
+      ```
+
+      #### 4. 批量迁移多个 key
+
+      迁移 `user:100`、`order:200`、`product:300` 三个 key 到目标实例，此时第一个 `key` 参数需设为 `""`，并通过 `KEYS` 指定批量 key：
+
+      ```bash
+      MIGRATE 192.168.1.100 6379 "" 0 5000 KEYS user:100 order:200 product:300
+      ```
+
+![image-20250724164953143](/Users/shilinling/Library/Application Support/typora-user-images/image-20250724164953143.png)
+
 ## string
 
 - `GET key`
@@ -107,6 +180,8 @@ expireat key timestamp
   - **时间复杂度**：O (N)，N 为键的数量
   - **优化点**：相比多次单 GET，减少网络往返次数，提升批量操作效率
 
+![image-20250724143806796](/Users/shilinling/Library/Application Support/typora-user-images/image-20250724143806796.png)
+
 ## list
 
 - ##### `LPUSH key value [value ...]`
@@ -139,6 +214,16 @@ expireat key timestamp
   - **时间复杂度**：O (S+N)，S 为起始偏移量，N 为返回元素数
   - **优化点**：Redis 会对范围进行边界检查，若 start 超过列表长度则返回空
 
+- Redis的lpush+brpop命令组合即可实现阻塞队列，生产
+
+  者客户端使用lrpush从列表左侧插入元素，多个消费者客户端使用brpop命令
+
+  阻塞式的“抢”列表尾部的元素，多个客户端保证了消费的负载均衡和高可用
+
+  性。
+
+![image-20250724151031150](/Users/shilinling/Library/Application Support/typora-user-images/image-20250724151031150.png)
+
 ## hash
 
 - ##### `HSET key field value`
@@ -170,6 +255,8 @@ expireat key timestamp
   - **原理**：直接操作内层字典的数值型字段，无需字符串解析
   - **时间复杂度**：O(1)
   - **应用场景**：适用于计数器场景，如用户积分系统
+
+![image-20250724145705403](/Users/shilinling/Library/Application Support/typora-user-images/image-20250724145705403.png)
 
 ## set
 
@@ -205,6 +292,8 @@ expireat key timestamp
   - **时间复杂度**：O (N*M)，N 为最小集合元素数，M 为集合数量
   - **优化策略**：Redis 会自动选择最小的集合作为基准，减少遍历次数
 
+![image-20250724154125086](/Users/shilinling/Library/Application Support/typora-user-images/image-20250724154125086.png)
+
 ## zset
 
 - ##### `ZADD key score member [score member ...]`
@@ -237,17 +326,44 @@ expireat key timestamp
   - **时间复杂度**：O (logN + M)，M 为删除元素数
   - **底层操作**：跳表删除节点后会重新平衡层级，保证后续操作效率
 
-#### **七、命令性能优化总结**
+![image-20250724154521840](/Users/shilinling/Library/Application Support/typora-user-images/image-20250724154521840.png)
 
-1. **避免大复杂度操作**：
-   - 禁止使用 `KEYS`、`HGETALL`、`SMEMBERS` 等全量操作，改用 `SCAN` 系列渐进式命令
-   - 大列表避免使用 `LINDEX`，改用 ZSet 按索引存储
-2. **利用批量操作**：
-   - 使用 `MGET`、`MSET`、`PIPELINE` 减少网络往返，提升批量操作效率
-   - 事务（`MULTI`/`EXEC`）可保证多个命令的原子性执行
-3. **数据结构选择**：
-   - 小集合用 `intset`（内存更优），大集合用哈希表
-   - 有序数据优先使用 ZSet（跳表），避免列表的 O (N) 范围查询
-4. **过期策略优化**：
-   - 合理设置过期时间，减少内存占用
-   - 对时效性要求高的数据使用 `EXPIRE`，而非主动调用 `DEL`
+
+
+对数据库操作
+
+Redis默认配置中是有16个数据库：假设databases=16，select0操作将切换到第一个数据库，select15选择最
+
+后一个数据库，但是0号数据库和15号数据库之间的数据没有任何关联
+
+Redis3.0中已经逐渐弱化这个功能，例如Redis的分布式实现Redis
+
+Cluster只允许使用0号数据库，只不过为了向下兼容老版本的数据库功能，
+
+该功能没有完全废弃掉，下面分析一下为什么要废弃掉这个“优秀”的功能
+
+呢？总结起来有三点：
+
+·Redis是单线程的。如果使用多个数据库，那么这些数据库仍然是使用
+
+一个CPU，彼此之间还是会受到影响的。
+
+多数据库的使用方式，会让调试和运维不同业务的数据库变的困难，
+
+假如有一个慢查询存在，依然会影响其他数据库，这样会使得别的业务方定
+
+位问题非常的困难。
+
+·部分Redis的客户端根本就不支持这种方式。即使支持，在开发的时候
+
+来回切换数字形式的数据库，很容易弄乱。
+
+
+
+
+
+2.flushdb/flushall
+
+flushdb/flushall命令用于清除数据库，两者的区别的是flushdb只清除当
+
+前数据库，flushall会清除所有数据库。

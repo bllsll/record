@@ -15,3 +15,6 @@
   - 随机删除volatile-random：从设置了过期时间的key中随机删除
   - 全局最近最少时间allkeys-lru：从所有key中选择最少使用的key，无论是否设置过期时间
   - 全局随机删除allkeys-random：从所有key中随机删除，不管是否设置过期时间
+
+
+
