@@ -49,7 +49,7 @@ redis采用jemalloc作为默认内存分配器，分配颗粒度为8字节(64操
 typedef struct redisObject {
     unsigned type:4;         // 4位：对象类型（如 STRING、LIST）
     unsigned encoding:4;     // 4位：编码方式（如 INT、EMBSTR）
-    unsigned lru:24;         // 24位：LRU 时间戳
+    unsigned lru:24;         // 24位：LRU 时间戳记录对象最后一次被访问的时间，
     int refcount;            // 4字节：引用计数
     void *ptr;               // 8字节：数据指针（EMBSTR 不使用）
 } robj;
